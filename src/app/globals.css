@@ -1,0 +1,136 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
+ * Design system tokens — Light (default) and Night mode.
+ *
+ * Night mode's --bg-base is REQUIRED to be exactly #000000 per spec. Do
+ * not "improve" this to a near-black like #0a0a0a — it's intentional.
+ */
+:root {
+  --bg-base: #FFFFFF;
+  --bg-surface: #F8FAFC;
+  --bg-card: #FFFFFF;
+  --bg-sidebar: #F1F5F9;
+  --bg-input: #F8FAFC;
+  --bg-hover: #F1F5F9;
+  --bg-elevated: #FFFFFF;
+
+  --primary: #6366F1;
+  --primary-dark: #4F46E5;
+  --primary-soft: rgba(99, 102, 241, 0.08);
+  --primary-ring: rgba(99, 102, 241, 0.20);
+
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-muted: #94A3B8;
+
+  --border: #E2E8F0;
+  --border-strong: #CBD5E1;
+
+  /* Semantic sentiment colors — not part of the spec's variable list, but
+     used consistently everywhere a sentiment badge/chart color is needed. */
+  --positive: #10B981;
+  --negative: #EF4444;
+  --neutral: #F59E0B;
+}
+
+[data-theme='night'] {
+  --bg-base: #000000;
+  --bg-surface: #050505;
+  --bg-card: #0A0A0A;
+  --bg-sidebar: #050505;
+  --bg-input: #111111;
+  --bg-hover: #0F0F0F;
+  --bg-elevated: #141414;
+
+  --primary: #818CF8;
+  --primary-dark: #6366F1;
+  --primary-soft: rgba(129, 140, 248, 0.10);
+  --primary-ring: rgba(129, 140, 248, 0.25);
+
+  --text-primary: #F8FAFC;
+  --text-secondary: #94A3B8;
+  --text-muted: #475569;
+
+  --border: rgba(255, 255, 255, 0.05);
+  --border-strong: rgba(255, 255, 255, 0.10);
+
+  --positive: #34D399;
+  --negative: #F87171;
+  --neutral: #FBBF24;
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  color-scheme: light;
+}
+
+html[data-theme='night'] {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Smooth theme transitions on every themed surface, without animating
+   layout-affecting properties (avoids jank on toggle). */
+.theme-transition {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Visible keyboard focus ring everywhere, using the primary color token. */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+::selection {
+  background-color: var(--primary-soft);
+  color: var(--text-primary);
+}
+
+/* Thin, unobtrusive scrollbars that respect the theme. */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--border-strong);
+  border-radius: 9999px;
+}
+
+/* Print styles for report export (browser print, per spec — no server PDF). */
+@media print {
+  [data-hide-on-print='true'] {
+    display: none !important;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+}
