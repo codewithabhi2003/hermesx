@@ -319,13 +319,31 @@ export interface ReportQuoteDto {
   channel: string;
 }
 
+export interface ReportPeriodComparisonDto {
+  totalFeedback: number;
+  positive: number;
+  negative: number;
+  neutral: number;
+}
+
 export interface ReportStatsDto {
   totalFeedback: number;
   positive: number;
   negative: number;
   neutral: number;
+  /**
+   * `totalFeedback` counts every feedback row created in the period;
+   * `positive + negative + neutral` only counts rows that have actually
+   * been through AI classification. This gap is real whenever feedback
+   * was imported/synced but not yet analyzed — surfacing it explicitly
+   * (rather than letting the two totals silently disagree) is what makes
+   * the report honest about how much of the period it actually covers.
+   */
+  unclassified: number;
   topThemes: ReportTopThemeDto[];
   representativeQuotes: ReportQuoteDto[];
+  /** Same-length period immediately before this one, for real (not invented) trend comparison. Null if that period has no data. */
+  previousPeriod: ReportPeriodComparisonDto | null;
 }
 
 export interface ReportContentDto {
