@@ -28,6 +28,9 @@ function formatDate(date: Date): string {
  * series (missing days filled with 0) so charting libraries never have to
  * guess about gaps.
  */
+
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const auth = await requireAuth();

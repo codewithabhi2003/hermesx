@@ -67,18 +67,18 @@ export default function LoginPage() {
     router.refresh();
   };
 
-  const useDemoAccount = (
-    email: string,
-    password: string,
-  ) => {
-    setFormError(null);
-    setValue('email', email, {
-      shouldValidate: true,
-    });
-    setValue('password', password, {
-      shouldValidate: true,
-    });
-  };
+  const fillDemoAccount = (
+  email: string,
+  password: string,
+) => {
+  setFormError(null);
+  setValue('email', email, {
+    shouldValidate: true,
+  });
+  setValue('password', password, {
+    shouldValidate: true,
+  });
+};
 
   return (
     <Card>
@@ -149,8 +149,8 @@ export default function LoginPage() {
                 key={account.role}
                 type="button"
                 onClick={() =>
-                  useDemoAccount(account.email, account.password)
-                }
+  fillDemoAccount(account.email, account.password)
+}
                 className="rounded-lg border border-border bg-surface px-3 py-2 text-xs font-medium text-text-primary transition hover:border-primary hover:text-primary"
               >
                 {account.role}

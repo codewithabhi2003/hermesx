@@ -1,6 +1,14 @@
 'use client';
 
-import { createContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
+
 import { SessionProvider } from 'next-auth/react';
 
 export type ThemeMode = 'light' | 'night';
@@ -42,13 +50,15 @@ function ThemeProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const setTheme = (next: ThemeMode) => {
-    setThemeState(next);
-    document.documentElement.dataset.theme = next;
-    window.localStorage.setItem(THEME_STORAGE_KEY, next);
-  };
+ const setTheme = useCallback((next: ThemeMode) => {
+  setThemeState(next);
+  document.documentElement.dataset.theme = next;
+  window.localStorage.setItem(THEME_STORAGE_KEY, next);
+}, []);
 
-  const toggleTheme = () => setTheme(theme === 'light' ? 'night' : 'light');
+const toggleTheme = useCallback(() => {
+  setTheme(theme === 'light' ? 'night' : 'light');
+}, [theme, setTheme]);
 
   // Keep multiple tabs in sync if the theme changes elsewhere.
   useEffect(() => {
@@ -63,7 +73,10 @@ function ThemeProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
-  const value = useMemo(() => ({ theme, setTheme, toggleTheme }), [theme]);
+  const value = useMemo(
+  () => ({ theme, setTheme, toggleTheme }),
+  [theme, setTheme, toggleTheme],
+);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

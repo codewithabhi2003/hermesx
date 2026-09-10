@@ -29,6 +29,9 @@ function formatDate(date: Date): string {
  * breakdown for stacked sentiment-trend charts, with missing days filled
  * to zero for a continuous series.
  */
+
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const auth = await requireAuth();

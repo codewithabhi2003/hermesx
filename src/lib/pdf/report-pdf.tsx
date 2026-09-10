@@ -1487,15 +1487,15 @@ const positiveQuotes = Array.from(
           </View>
         ) : (
           <Text
-            style={[
-              styles.paragraph,
-              { marginBottom: 16 },
-            ]}
-          >
-            No feedback was recorded in the immediately
-            preceding period, so a numeric comparison isn't
-            available.
-          </Text>
+  style={[
+    styles.paragraph,
+    { marginBottom: 16 },
+  ]}
+>
+  No feedback was recorded in the immediately
+  preceding period, so a numeric comparison is not
+  available.
+</Text>
         )}
 
         <View style={styles.changeNarrativeCard}>

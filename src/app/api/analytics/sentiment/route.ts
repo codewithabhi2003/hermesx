@@ -14,6 +14,8 @@ function toPercentage(part: number, total: number): number {
  * ALL feedback, distinguishing rows that have not yet been AI-classified
  * (`sentiment` is null) from a genuine NEUTRAL classification.
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const auth = await requireAuth();

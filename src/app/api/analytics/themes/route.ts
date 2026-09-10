@@ -9,6 +9,9 @@ import { ok, handleRouteError } from '@/lib/responses';
  * feedback volume, each with its own sentiment breakdown so the frontend
  * can render a leaderboard without N follow-up requests.
  */
+
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const auth = await requireAuth();

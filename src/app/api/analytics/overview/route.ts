@@ -12,6 +12,9 @@ const TOP_THEMES_LIMIT = 5;
  * scoped to the authenticated workspace — nothing here is hard-coded.
  * Uses `actioned`, never `actionable`, per the frozen DTO contract.
  */
+
+export const dynamic = 'force-dynamic'; 
+
 export async function GET() {
   try {
     const auth = await requireAuth();
