@@ -259,7 +259,7 @@ export interface ThemeSentimentBreakdownDto {
 /** GET /api/analytics/themes — a plain array, not paginated. */
 export type AnalyticsThemesDto = ThemeSentimentBreakdownDto[];
 
-export interface TrendsSeriesPointDto {
+export interface TrendsSeriesPointDto extends Record<string, string | number> {
   date: string; // YYYY-MM-DD
   positive: number;
   negative: number;

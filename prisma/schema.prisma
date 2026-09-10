@@ -1,0 +1,170 @@
+// HermesX — Prisma Schema
+// PostgreSQL (Neon) with pgvector for semantic retrieval.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgvector(map: "vector")]
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  ANALYST
+  VIEWER
+}
+
+enum Channel {
+  SUPPORT
+  APP_STORE
+  SURVEY
+  SALES
+  SOCIAL
+  MANUAL
+}
+
+enum Sentiment {
+  POSITIVE
+  NEGATIVE
+  NEUTRAL
+}
+
+enum Status {
+  NEW
+  REVIEWED
+  ACTIONED
+}
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users     User[]
+  feedback  Feedback[]
+  themes    Theme[]
+  reports   Report[]
+
+  @@map("workspaces")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  role         Role      @default(VIEWER)
+  workspaceId  String
+  avatarUrl    String?   @db.Text
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  lastLoginAt  DateTime?
+
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  generatedReports Report[]
+
+  @@index([workspaceId])
+  @@index([email])
+  @@map("users")
+}
+
+model Feedback {
+  id             String    @id @default(cuid())
+  content        String
+  channel        Channel   @default(MANUAL)
+  sourceRef      String?
+  customerLabel  String?
+  sentiment      Sentiment?
+  sentimentScore Float?
+  featureArea    String?
+  aiRationale    String?
+  status         Status    @default(NEW)
+  aiAnalyzed     Boolean   @default(false)
+  classifiedAt   DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  workspaceId    String
+
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  feedbackThemes  FeedbackTheme[]
+  embedding       Embedding?
+
+  @@index([workspaceId])
+  @@index([createdAt])
+  @@index([workspaceId, createdAt])
+  @@index([sentiment])
+  @@index([status])
+  @@map("feedback")
+}
+
+model Theme {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  color       String   @default("#6366F1")
+  workspaceId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace      Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  feedbackThemes FeedbackTheme[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@map("themes")
+}
+
+model FeedbackTheme {
+  feedbackId String
+  themeId    String
+  confidence Float  @default(1)
+
+  feedback Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  theme    Theme    @relation(fields: [themeId], references: [id], onDelete: Cascade)
+
+  @@id([feedbackId, themeId])
+  @@index([feedbackId])
+  @@index([themeId])
+  @@map("feedback_themes")
+}
+
+model Embedding {
+  id         String   @id @default(cuid())
+  feedbackId String   @unique
+  vector     Unsupported("vector(1024)")
+  createdAt  DateTime @default(now())
+
+  feedback Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+
+  @@map("embeddings")
+}
+
+model Report {
+  id          String   @id @default(cuid())
+  workspaceId String
+  generatedBy String
+  title       String
+  periodStart DateTime
+  periodEnd   DateTime
+  contentJson Json
+  createdAt   DateTime @default(now())
+
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  generatedByUser User      @relation(fields: [generatedBy], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId, createdAt])
+  @@map("reports")
+}
