@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Least-privilege by default — this pipeline only reads the repo, it
+# never needs to write anything back.
+permissions:
+  contents: read
+
+jobs:
+  build-and-check:
+    name: Lint, type-check, test, and build
+    runs-on: ubuntu-latest
+
+    # These are placeholder values, not real credentials. lib/env.ts
+    # validates that required environment variables are PRESENT at
+    # startup — `next build` triggers that validation even though it
+    # never actually connects to Postgres/Groq/Cohere during a build, so
+    # the values just need to be non-empty strings in the right shape,
+    # not working credentials. Never put real secrets here directly;
+    # if this pipeline ever needs to run against a real database or call
+    # a real provider, use GitHub Actions "Secrets" and reference them
+    # with ${{ secrets.NAME }} instead.
+    env:
+      DATABASE_URL: postgresql://ci_user:ci_password@localhost:5432/ci_placeholder
+      NEXTAUTH_SECRET: ci-placeholder-secret-do-not-use-in-production
+      NEXTAUTH_URL: http://localhost:3000
+      GROQ_API_KEY: ci-placeholder-groq-key
+      GROQ_MODEL: openai/gpt-oss-20b
+      COHERE_API_KEY: ci-placeholder-cohere-key
+      COHERE_EMBED_MODEL: embed-english-v3.0
+      EMBEDDING_DIMENSIONS: '1024'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Required before type-check/build — the Prisma client's generated
+      # types don't exist in a fresh checkout until this runs. Only reads
+      # prisma/schema.prisma; does not need a live database connection.
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run TypeScript type check
+        run: npm run type-check
+
+      # --passWithNoTests: this project's test suite (vitest) currently
+      # has zero test files, which vitest otherwise treats as a failure.
+      # Remove this flag once real tests exist, so CI actually enforces
+      # them instead of silently passing.
+      - name: Run test suite
+        run: npx vitest run --passWithNoTests
+
+      - name: Build application
+        run: npm run build
