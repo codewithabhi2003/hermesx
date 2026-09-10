@@ -1,4 +1,5 @@
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import path from 'node:path';
+import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer';
 import type { ReportContentDto } from '@/types';
 
 /**
@@ -16,10 +17,46 @@ import type { ReportContentDto } from '@/types';
  * read defensively (`?? 0` / `?? null`) so older reports render fine
  * without those fields rather than crashing.
  *
- * Uses the built-in Helvetica font (no custom font registration) — this
- * runs in a Node server context, not a browser, so the app's web font
- * isn't available here without extra setup not worth it for this feature.
+ * v2 design pass:
+ *  - Registers "Inter" as the report typeface instead of built-in Helvetica.
+ *  - Cover page is now a white page with a bordered frame + a brand accent
+ *    bar, instead of the old dark full-bleed cover.
+ *  - Every page gets a thin colored accent bar + a rule under the header,
+ *    so the whole report reads as one designed system, not stacked cards.
+ *  - "Report Information" lives on its own page (previously it could get
+ *    sliced in half by react-pdf's automatic page-break when the
+ *    Recommended Actions page overflowed).
+ *  - Sparse/empty states (no themes, no quotes, no previous period) are
+ *    boxed as proper empty-state cards instead of a lone line of text.
+ *
+ * FONT SETUP (required before this will render):
+ *   1. Download Inter-Regular.ttf, Inter-Bold.ttf and Inter-Italic.ttf
+ *      (e.g. from https://fonts.google.com/specimen/Inter).
+ *   2. Place all three files in `public/fonts/` in this project.
+ *   3. Font.register below reads them from disk at request time — nothing
+ *      needs bundling — but if the files are missing, PDF generation will
+ *      throw as soon as this module loads. Swap the family name/paths
+ *      below if you'd rather use a different typeface.
+ *
+ * Uses `node:path` + `Font.register` from disk — this runs in a Node
+ * server context, not a browser, so there's no `fetch`/network dependency
+ * for the font at render time.
  */
+
+const FONTS_DIR = path.join(process.cwd(), 'public', 'fonts');
+
+Font.register({
+  family: 'Inter',
+  fonts: [
+    { src: path.join(FONTS_DIR, 'Inter-Regular.ttf'), fontWeight: 400 },
+    { src: path.join(FONTS_DIR, 'Inter-Bold.ttf'), fontWeight: 700 },
+    {
+      src: path.join(FONTS_DIR, 'Inter-Italic.ttf'),
+      fontWeight: 400,
+      fontStyle: 'italic',
+    },
+  ],
+});
 
 const COLORS = {
   primary: '#6366F1',
@@ -45,81 +82,177 @@ const styles = StyleSheet.create({
     paddingBottom: 56,
     paddingHorizontal: 48,
     fontSize: 10,
-    fontFamily: 'Helvetica',
+    fontFamily: 'Inter',
     color: COLORS.text,
   },
 
+  // ── Accent bar shown at the very top of every content page ──
+  pageAccentBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 6,
+    backgroundColor: COLORS.primary,
+  },
+
+  // ── Cover page (Page 1) ──
   coverPage: {
-    padding: 48,
-    fontFamily: 'Helvetica',
+    padding: 32,
+    fontFamily: 'Inter',
     color: COLORS.text,
-    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+
+  coverFrame: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+
+  coverTopBar: {
+    height: 8,
+    backgroundColor: COLORS.primary,
+  },
+
+  coverBody: {
+    flex: 1,
+    paddingHorizontal: 48,
+    paddingTop: 60,
+    paddingBottom: 24,
+    justifyContent: 'flex-start',
+  },
+
+  coverLogoRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0B0B14',
+    marginBottom: 30,
   },
 
   coverLogoBadge: {
-    width: 56,
-    height: 56,
-    borderRadius: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 10,
     backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 18,
+    marginRight: 14,
   },
 
   coverLogoBadgeText: {
     color: '#FFFFFF',
-    fontSize: 24,
-    fontFamily: 'Helvetica-Bold',
+    fontSize: 19,
+    fontFamily: 'Inter',
+    fontWeight: 700,
   },
 
   coverBrand: {
-    fontSize: 22,
-    fontFamily: 'Helvetica-Bold',
-    color: '#FFFFFF',
-    marginBottom: 6,
+    fontSize: 16,
+    fontFamily: 'Inter',
+    fontWeight: 700,
+    color: COLORS.text,
+    marginBottom: 3,
   },
 
   coverTagline: {
-    fontSize: 10.5,
-    color: '#94A3B8',
-    marginBottom: 56,
-    letterSpacing: 0.5,
+    fontSize: 7.5,
+    color: COLORS.textMuted,
+    letterSpacing: 1.2,
+  },
+
+  coverDivider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginBottom: 40,
+  },
+
+  coverEyebrow: {
+    fontSize: 9,
+    fontFamily: 'Inter',
+    fontWeight: 700,
+    color: COLORS.primaryDark,
+    letterSpacing: 1.6,
+    marginBottom: 14,
   },
 
   coverTitle: {
-    fontSize: 24,
-    fontFamily: 'Helvetica-Bold',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    marginBottom: 14,
-    maxWidth: 400,
+    fontSize: 27,
+    fontFamily: 'Inter',
+    fontWeight: 700,
+    color: COLORS.text,
+    lineHeight: 1.25,
+    marginBottom: 16,
+    maxWidth: 420,
   },
 
   coverPeriod: {
     fontSize: 12,
-    color: '#CBD5E1',
-    marginBottom: 70,
+    color: COLORS.textSecondary,
+    marginBottom: 48,
+  },
+
+  coverStatsRow: {
+    flexDirection: 'row',
+  },
+
+  coverStatCard: {
+    width: '31.5%',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    padding: 14,
+    backgroundColor: COLORS.surface,
+    marginRight: 10,
+  },
+
+  coverStatCardLast: {
+    width: '31.5%',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    padding: 14,
+    backgroundColor: COLORS.surface,
+  },
+
+  coverStatValue: {
+    fontSize: 19,
+    fontFamily: 'Inter',
+    fontWeight: 700,
+    color: COLORS.primaryDark,
+    marginBottom: 4,
+  },
+
+  coverStatLabel: {
+    fontSize: 6.8,
+    color: COLORS.textMuted,
+    letterSpacing: 0.5,
   },
 
   coverMetaBlock: {
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.15)',
-    paddingTop: 18,
-    alignItems: 'center',
+    borderTopColor: COLORS.border,
+    paddingVertical: 18,
+    paddingHorizontal: 48,
+    backgroundColor: COLORS.surface,
   },
 
   coverMetaLine: {
-    fontSize: 9,
-    color: '#94A3B8',
+    fontSize: 8.5,
+    color: COLORS.textMuted,
     marginBottom: 3,
   },
 
+  // ── Shared page header/footer ──
   pageHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 24,
+    paddingTop: 4,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
 
   pageHeaderBadge: {
@@ -135,7 +268,8 @@ const styles = StyleSheet.create({
   pageHeaderBadgeText: {
     color: '#FFFFFF',
     fontSize: 10,
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Inter',
+    fontWeight: 700,
   },
 
   pageHeaderBrand: {
@@ -146,7 +280,8 @@ const styles = StyleSheet.create({
 
   sectionTitle: {
     fontSize: 18,
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Inter',
+    fontWeight: 700,
     marginBottom: 18,
     color: COLORS.text,
   },
@@ -159,6 +294,8 @@ const styles = StyleSheet.create({
 
   summaryBox: {
     backgroundColor: COLORS.primarySoft,
+    borderWidth: 1,
+    borderColor: '#DDE3FB',
     borderLeftWidth: 3,
     borderLeftColor: COLORS.primary,
     borderRadius: 6,
@@ -167,7 +304,8 @@ const styles = StyleSheet.create({
 
   summaryBoxLabel: {
     fontSize: 8.5,
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Inter',
+    fontWeight: 700,
     color: COLORS.primaryDark,
     letterSpacing: 0.8,
     marginBottom: 8,
@@ -197,7 +335,8 @@ const styles = StyleSheet.create({
 
   sectionCardLabel: {
     fontSize: 8,
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Inter',
+    fontWeight: 700,
     color: COLORS.textMuted,
     letterSpacing: 0.8,
     marginBottom: 8,
@@ -205,7 +344,8 @@ const styles = StyleSheet.create({
 
   sectionCardTitle: {
     fontSize: 12,
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Inter',
+    fontWeight: 700,
     color: COLORS.text,
     marginBottom: 7,
   },
@@ -214,6 +354,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 16,
     backgroundColor: COLORS.primarySoft,
+    borderWidth: 1,
+    borderColor: '#DDE3FB',
     borderLeftWidth: 4,
     borderLeftColor: COLORS.primary,
     marginTop: 16,
@@ -221,7 +363,8 @@ const styles = StyleSheet.create({
 
   insightLabel: {
     fontSize: 8,
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Inter',
+    fontWeight: 700,
     color: COLORS.primaryDark,
     letterSpacing: 0.8,
     marginBottom: 7,
@@ -262,7 +405,8 @@ const styles = StyleSheet.create({
 
   miniMetricValue: {
     fontSize: 18,
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Inter',
+    fontWeight: 700,
     color: COLORS.text,
     marginBottom: 4,
   },
@@ -284,7 +428,8 @@ const styles = StyleSheet.create({
 
   sentimentTitle: {
     fontSize: 11,
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Inter',
+    fontWeight: 700,
     color: COLORS.text,
     marginBottom: 4,
   },
@@ -306,7 +451,8 @@ const styles = StyleSheet.create({
 
   themeSummaryLabel: {
     fontSize: 8,
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Inter',
+    fontWeight: 700,
     color: COLORS.textMuted,
     letterSpacing: 0.8,
     marginBottom: 7,
@@ -317,14 +463,35 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 18,
     backgroundColor: COLORS.primarySoft,
+    borderWidth: 1,
+    borderColor: '#DDE3FB',
     borderLeftWidth: 4,
     borderLeftColor: COLORS.primary,
   },
 
   changeNarrativeLabel: {
     fontSize: 8,
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Inter',
+    fontWeight: 700,
     color: COLORS.primaryDark,
+    letterSpacing: 0.8,
+    marginBottom: 8,
+  },
+
+  emptyStateCard: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 10,
+    padding: 18,
+    backgroundColor: COLORS.surface,
+    marginBottom: 16,
+  },
+
+  emptyStateTitle: {
+    fontSize: 8,
+    fontFamily: 'Inter',
+    fontWeight: 700,
+    color: COLORS.textMuted,
     letterSpacing: 0.8,
     marginBottom: 8,
   },
@@ -362,7 +529,8 @@ const styles = StyleSheet.create({
 
   voiceSectionTitle: {
     fontSize: 8.5,
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Inter',
+    fontWeight: 700,
     letterSpacing: 0.7,
     marginBottom: 9,
   },
@@ -420,7 +588,8 @@ const styles = StyleSheet.create({
 
   actionPriority: {
     fontSize: 7,
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Inter',
+    fontWeight: 700,
     color: COLORS.primaryDark,
     letterSpacing: 0.5,
   },
@@ -443,7 +612,8 @@ const styles = StyleSheet.create({
 
   actionContextLabel: {
     fontSize: 8,
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Inter',
+    fontWeight: 700,
     color: COLORS.textMuted,
     letterSpacing: 0.8,
     marginBottom: 7,
@@ -483,7 +653,8 @@ const styles = StyleSheet.create({
 
   actionMetricValue: {
     fontSize: 15,
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Inter',
+    fontWeight: 700,
     color: COLORS.text,
     marginBottom: 3,
   },
@@ -520,7 +691,8 @@ const styles = StyleSheet.create({
 
   metricValue: {
     fontSize: 22,
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Inter',
+    fontWeight: 700,
     marginBottom: 3,
   },
 
@@ -539,7 +711,8 @@ const styles = StyleSheet.create({
 
   donutCenterValue: {
     fontSize: 18,
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Inter',
+    fontWeight: 700,
     color: COLORS.text,
   },
 
@@ -578,7 +751,8 @@ const styles = StyleSheet.create({
 
   legendValue: {
     fontSize: 10,
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Inter',
+    fontWeight: 700,
     color: COLORS.text,
   },
 
@@ -602,7 +776,8 @@ const styles = StyleSheet.create({
 
   themeRankText: {
     fontSize: 8.5,
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Inter',
+    fontWeight: 700,
     color: COLORS.textSecondary,
   },
 
@@ -618,7 +793,8 @@ const styles = StyleSheet.create({
 
   themeName: {
     fontSize: 10.5,
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Inter',
+    fontWeight: 700,
     color: COLORS.text,
   },
 
@@ -668,13 +844,15 @@ const styles = StyleSheet.create({
 
   comparisonValue: {
     fontSize: 16,
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Inter',
+    fontWeight: 700,
     color: COLORS.text,
   },
 
   comparisonDelta: {
     fontSize: 9,
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Inter',
+    fontWeight: 700,
   },
 
   comparisonPrevious: {
@@ -685,7 +863,8 @@ const styles = StyleSheet.create({
 
   sectionHeading: {
     fontSize: 9,
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Inter',
+    fontWeight: 700,
     letterSpacing: 0.6,
     marginBottom: 10,
   },
@@ -698,13 +877,15 @@ const styles = StyleSheet.create({
 
   quoteMark: {
     fontSize: 18,
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Inter',
+    fontWeight: 700,
     marginBottom: 2,
   },
 
   quoteText: {
     fontSize: 10.5,
-    fontFamily: 'Helvetica-Oblique',
+    fontFamily: 'Inter',
+    fontStyle: 'italic',
     color: COLORS.text,
     lineHeight: 1.5,
     marginBottom: 6,
@@ -733,7 +914,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     color: '#FFFFFF',
     fontSize: 10,
-    fontFamily: 'Helvetica-Bold',
+    fontFamily: 'Inter',
+    fontWeight: 700,
     textAlign: 'center',
     paddingTop: 6,
     marginRight: 12,
@@ -762,6 +944,10 @@ const styles = StyleSheet.create({
   },
 });
 
+function PageAccentBar() {
+  return <View style={styles.pageAccentBar} fixed />;
+}
+
 function PageHeader({ label }: { label: string }) {
   return (
     <View style={styles.pageHeader} fixed>
@@ -783,7 +969,11 @@ function Footer({ pageLabel }: { pageLabel: string }) {
         HermesX — AI-Powered Customer Feedback Intelligence
       </Text>
 
-      <Text render={({ pageNumber }) => `${pageLabel} · Page ${pageNumber}`} />
+      <Text
+        render={({ pageNumber, totalPages }) =>
+          `${pageLabel} · Page ${pageNumber} of ${totalPages}`
+        }
+      />
     </View>
   );
 }
@@ -835,7 +1025,8 @@ function SentimentBar({
         <Text
           style={{
             fontSize: 20,
-            fontFamily: 'Helvetica-Bold',
+            fontFamily: 'Inter',
+            fontWeight: 700,
             color: COLORS.text,
           }}
         >
@@ -1074,39 +1265,83 @@ const positiveQuotes = Array.from(
         size="A4"
         style={styles.coverPage}
       >
-        <View style={styles.coverLogoBadge}>
-          <Text style={styles.coverLogoBadgeText}>
-            H
-          </Text>
-        </View>
+        <View style={styles.coverFrame}>
+          <View style={styles.coverTopBar} />
 
-        <Text style={styles.coverBrand}>
-          HermesX
-        </Text>
+          <View style={styles.coverBody}>
+            <View style={styles.coverLogoRow}>
+              <View style={styles.coverLogoBadge}>
+                <Text style={styles.coverLogoBadgeText}>
+                  H
+                </Text>
+              </View>
 
-        <Text style={styles.coverTagline}>
-          AI-POWERED CUSTOMER FEEDBACK INTELLIGENCE
-        </Text>
+              <View>
+                <Text style={styles.coverBrand}>
+                  HermesX
+                </Text>
+                <Text style={styles.coverTagline}>
+                  AI-POWERED CUSTOMER FEEDBACK INTELLIGENCE
+                </Text>
+              </View>
+            </View>
 
-        <Text style={styles.coverTitle}>
-          {data.title}
-        </Text>
+            <View style={styles.coverDivider} />
 
-        <Text style={styles.coverPeriod}>
-          {formatDate(data.periodStart)} —{' '}
-          {formatDate(data.periodEnd)}
-        </Text>
+            <Text style={styles.coverEyebrow}>
+              CUSTOMER FEEDBACK REPORT
+            </Text>
 
-        <View style={styles.coverMetaBlock}>
-          <Text style={styles.coverMetaLine}>
-            PREPARED FOR{' '}
-            {data.workspaceName.toUpperCase()}
-          </Text>
+            <Text style={styles.coverTitle}>
+              {data.title}
+            </Text>
 
-          <Text style={styles.coverMetaLine}>
-            Generated {formatDate(data.createdAt)} by{' '}
-            {data.generatedByName}
-          </Text>
+            <Text style={styles.coverPeriod}>
+              {formatDate(data.periodStart)} —{' '}
+              {formatDate(data.periodEnd)}
+            </Text>
+
+            <View style={styles.coverStatsRow}>
+              <View style={styles.coverStatCard}>
+                <Text style={styles.coverStatValue}>
+                  {stats.totalFeedback}
+                </Text>
+                <Text style={styles.coverStatLabel}>
+                  FEEDBACK ITEMS
+                </Text>
+              </View>
+
+              <View style={styles.coverStatCard}>
+                <Text style={styles.coverStatValue}>
+                  {stats.topThemes.length}
+                </Text>
+                <Text style={styles.coverStatLabel}>
+                  THEMES TRACKED
+                </Text>
+              </View>
+
+              <View style={styles.coverStatCardLast}>
+                <Text style={styles.coverStatValue}>
+                  {analyzedPercentage}%
+                </Text>
+                <Text style={styles.coverStatLabel}>
+                  ANALYZED
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.coverMetaBlock}>
+            <Text style={styles.coverMetaLine}>
+              PREPARED FOR{' '}
+              {data.workspaceName.toUpperCase()}
+            </Text>
+
+            <Text style={styles.coverMetaLine}>
+              Generated {formatDate(data.createdAt)} by{' '}
+              {data.generatedByName}
+            </Text>
+          </View>
         </View>
       </Page>
 
@@ -1116,6 +1351,7 @@ const positiveQuotes = Array.from(
         size="A4"
         style={styles.page}
       >
+        <PageAccentBar />
         <PageHeader label="Executive Summary" />
 
         <Text style={styles.sectionTitle}>
@@ -1193,6 +1429,7 @@ const positiveQuotes = Array.from(
         size="A4"
         style={styles.page}
       >
+        <PageAccentBar />
         <PageHeader label="Feedback Overview" />
 
         <Text style={styles.sectionTitle}>
@@ -1262,6 +1499,7 @@ const positiveQuotes = Array.from(
               styles.summaryBox,
               {
                 backgroundColor: COLORS.surface,
+                borderColor: COLORS.border,
                 borderLeftColor: COLORS.pending,
                 marginBottom: 20,
               },
@@ -1300,6 +1538,7 @@ const positiveQuotes = Array.from(
         size="A4"
         style={styles.page}
       >
+        <PageAccentBar />
         <PageHeader label="Sentiment Analysis" />
 
         <Text style={styles.sectionTitle}>
@@ -1379,6 +1618,7 @@ const positiveQuotes = Array.from(
         size="A4"
         style={styles.page}
       >
+        <PageAccentBar />
         <PageHeader label="Top Themes" />
 
         <Text style={styles.sectionTitle}>
@@ -1426,9 +1666,14 @@ const positiveQuotes = Array.from(
             </View>
           ))
         ) : (
-          <Text style={styles.paragraph}>
-            No themes were recorded for this period.
-          </Text>
+          <View style={styles.emptyStateCard}>
+            <Text style={styles.emptyStateTitle}>
+              NO THEMES YET
+            </Text>
+            <Text style={styles.paragraph}>
+              No themes were recorded for this period.
+            </Text>
+          </View>
         )}
 
         <View style={styles.themeSummaryCard}>
@@ -1449,6 +1694,7 @@ const positiveQuotes = Array.from(
         size="A4"
         style={styles.page}
       >
+        <PageAccentBar />
         <PageHeader label="Major Changes" />
 
         <Text style={styles.sectionTitle}>
@@ -1486,16 +1732,16 @@ const positiveQuotes = Array.from(
             />
           </View>
         ) : (
-          <Text
-  style={[
-    styles.paragraph,
-    { marginBottom: 16 },
-  ]}
->
-  No feedback was recorded in the immediately
-  preceding period, so a numeric comparison is not
-  available.
-</Text>
+          <View style={styles.emptyStateCard}>
+            <Text style={styles.emptyStateTitle}>
+              NO PRIOR PERIOD TO COMPARE
+            </Text>
+            <Text style={styles.paragraph}>
+              No feedback was recorded in the immediately
+              preceding period, so a numeric comparison is
+              not available.
+            </Text>
+          </View>
         )}
 
         <View style={styles.changeNarrativeCard}>
@@ -1513,6 +1759,7 @@ const positiveQuotes = Array.from(
       {/* Page 7 — Voice of Customer */}
 
       <Page size="A4" style={styles.page}>
+        <PageAccentBar />
         <PageHeader label="Voice of Customer" />
 
         <Text style={styles.sectionTitle}>
@@ -1572,14 +1819,14 @@ const positiveQuotes = Array.from(
             ))}
           </View>
         ) : (
-          <Text
-            style={[
-              styles.paragraph,
-              { marginBottom: 12 },
-            ]}
-          >
-            No negative quotes were available for this period.
-          </Text>
+          <View style={styles.emptyStateCard}>
+            <Text style={styles.emptyStateTitle}>
+              NO NEGATIVE QUOTES
+            </Text>
+            <Text style={styles.paragraph}>
+              No negative quotes were available for this period.
+            </Text>
+          </View>
         )}
 
         <View style={{ marginTop: 4, marginBottom: 8 }}>
@@ -1626,9 +1873,14 @@ const positiveQuotes = Array.from(
             ))}
           </View>
         ) : (
-          <Text style={styles.paragraph}>
-            No positive quotes were available for this period.
-          </Text>
+          <View style={styles.emptyStateCard}>
+            <Text style={styles.emptyStateTitle}>
+              NO POSITIVE QUOTES
+            </Text>
+            <Text style={styles.paragraph}>
+              No positive quotes were available for this period.
+            </Text>
+          </View>
         )}
 
         <View style={styles.voiceTakeawayCard}>
@@ -1648,9 +1900,10 @@ const positiveQuotes = Array.from(
         <Footer pageLabel="Voice of Customer" />
       </Page>
 
-      {/* Page 8 — Recommended Actions + Report Information */}
+      {/* Page 8 — Recommended Actions */}
 
       <Page size="A4" style={styles.page}>
+        <PageAccentBar />
         <PageHeader label="Recommended Actions" />
 
         <Text style={styles.sectionTitle}>
@@ -1726,17 +1979,60 @@ const positiveQuotes = Array.from(
           ))}
         </View>
 
+        <Footer pageLabel="Recommended Actions" />
+      </Page>
+
+      {/* Page 9 — Report Information */}
+
+      <Page size="A4" style={styles.page}>
+        <PageAccentBar />
+        <PageHeader label="Report Information" />
+
+        <Text style={styles.sectionTitle}>
+          Report Information
+        </Text>
+
+        <Text style={styles.introText}>
+          Summary details and methodology behind this report.
+        </Text>
+
+        <View style={styles.miniMetricRow}>
+          <View style={styles.miniMetricCard}>
+            <Text style={styles.miniMetricValue}>
+              {stats.totalFeedback}
+            </Text>
+            <Text style={styles.miniMetricLabel}>
+              TOTAL FEEDBACK
+            </Text>
+          </View>
+
+          <View style={styles.miniMetricCard}>
+            <Text style={[styles.miniMetricValue, { color: COLORS.positive }]}>
+              {stats.positive}
+            </Text>
+            <Text style={styles.miniMetricLabel}>
+              POSITIVE
+            </Text>
+          </View>
+
+          <View style={styles.miniMetricCardLast}>
+            <Text style={[styles.miniMetricValue, { color: COLORS.negative }]}>
+              {stats.negative}
+            </Text>
+            <Text style={styles.miniMetricLabel}>
+              NEGATIVE
+            </Text>
+          </View>
+        </View>
+
         <View style={styles.reportInfoCard}>
           <Text
             style={[
               styles.sectionHeading,
-              {
-                color: COLORS.textMuted,
-                marginBottom: 8,
-              },
+              { color: COLORS.textMuted, marginBottom: 8 },
             ]}
           >
-            REPORT INFORMATION
+            REPORT DETAILS
           </Text>
 
           <Text style={styles.quoteMeta}>
@@ -1756,7 +2052,33 @@ const positiveQuotes = Array.from(
           </Text>
         </View>
 
-        <Footer pageLabel="Recommended Actions" />
+        <View style={styles.themeSummaryCard}>
+          <Text style={styles.themeSummaryLabel}>
+            HOW THIS REPORT WAS GENERATED
+          </Text>
+          <Text style={styles.paragraph}>
+            Every piece of feedback collected during the report period is
+            automatically classified by sentiment and grouped into themes.
+            The executive summary, sentiment interpretation, thematic
+            insights, and recommended actions in this report are generated
+            directly from those classifications and the underlying feedback
+            text — no figures shown are estimated or manually adjusted.
+          </Text>
+        </View>
+
+        <View style={{ marginTop: 20, alignItems: 'center' }}>
+          <Text
+            style={{
+              fontSize: 8.5,
+              color: COLORS.textMuted,
+              textAlign: 'center',
+            }}
+          >
+            Questions about this report? Reach out to your workspace admin.
+          </Text>
+        </View>
+
+        <Footer pageLabel="Report Information" />
       </Page>
     </Document>
   );
