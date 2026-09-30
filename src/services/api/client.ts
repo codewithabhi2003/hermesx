@@ -59,6 +59,18 @@ export function unwrap<T>(response: AxiosResponse<ApiSuccessResponse<T>>): T {
 /** Unwraps a paginated envelope down to `{ data, pagination }`. */
 export function unwrapPaginated<T>(
   response: AxiosResponse<ApiSuccessPaginatedResponse<T>>
-): { data: T[]; pagination: Pagination } {
-  return { data: response.data.data, pagination: response.data.pagination };
+): {
+  data: T[];
+  pagination: Pagination;
+  statusCounts?: {
+    NEW: number;
+    REVIEWED: number;
+    ACTIONED: number;
+  };
+} {
+  return {
+    data: response.data.data,
+    pagination: response.data.pagination,
+    statusCounts: response.data.statusCounts,
+  };
 }

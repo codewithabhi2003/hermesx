@@ -61,6 +61,11 @@ export interface ApiSuccessPaginatedResponse<T> {
   success: true;
   data: T[];
   pagination: Pagination;
+  statusCounts?: {
+    NEW: number;
+    REVIEWED: number;
+    ACTIONED: number;
+  };
 }
 
 export interface ApiErrorResponse {

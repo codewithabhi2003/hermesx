@@ -1,16 +1,27 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
 import { requireAuth, requireRole } from '@/lib/auth/permissions';
-import { createFeedbackSchema, feedbackQuerySchema } from '@/lib/validation/feedback';
-import { okPaginated, ok, handleRouteError } from '@/lib/responses';
+import {
+  createFeedbackSchema,
+  feedbackQuerySchema,
+} from '@/lib/validation/feedback';
+import { ok, handleRouteError } from '@/lib/responses';
 import { classifyAndPersist } from '@/lib/ai/classifier';
 import { upsertFeedbackEmbedding } from '@/lib/embeddings/cohere';
 import { checkRateLimit } from '@/lib/security/rate-limit';
 import { logger } from '@/lib/logger';
 
 function toFeedbackDto(
-  feedback: Prisma.FeedbackGetPayload<{ include: { feedbackThemes: { include: { theme: true } } } }>
+  feedback: Prisma.FeedbackGetPayload<{
+    include: {
+      feedbackThemes: {
+        include: {
+          theme: true;
+        };
+      };
+    };
+  }>
 ) {
   return {
     id: feedback.id,
@@ -42,9 +53,12 @@ function toFeedbackDto(
  *
  * Any authenticated role. Supports pagination, full-text-ish search,
  * channel/sentiment/status/theme filters, a date range, and sorting.
- * Every filter is applied on top of a hard `workspaceId` constraint so a
- * caller can never see another tenant's feedback regardless of the query
- * string supplied.
+ *
+ * Every feedback query is hard-scoped to the authenticated workspace.
+ *
+ * The response also includes statusCounts so the Inbox can display
+ * accurate NEW / REVIEWED / ACTIONED totals across the complete
+ * filtered feedback set, rather than only the current pagination page.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -55,51 +69,151 @@ export async function GET(request: NextRequest) {
     );
 
     const where: Prisma.FeedbackWhereInput = {
-      workspaceId: auth.workspaceId, // non-negotiable tenant scope
+      workspaceId: auth.workspaceId,
     };
 
-    if (query.channel) where.channel = query.channel;
-    if (query.sentiment) where.sentiment = query.sentiment;
-    if (query.status) where.status = query.status;
+    if (query.channel) {
+      where.channel = query.channel;
+    }
+
+    if (query.sentiment) {
+      where.sentiment = query.sentiment;
+    }
+
+    if (query.status) {
+      where.status = query.status;
+    }
 
     if (query.search) {
       where.OR = [
-        { content: { contains: query.search, mode: 'insensitive' } },
-        { customerLabel: { contains: query.search, mode: 'insensitive' } },
-        { sourceRef: { contains: query.search, mode: 'insensitive' } },
+        {
+          content: {
+            contains: query.search,
+            mode: 'insensitive',
+          },
+        },
+        {
+          customerLabel: {
+            contains: query.search,
+            mode: 'insensitive',
+          },
+        },
+        {
+          sourceRef: {
+            contains: query.search,
+            mode: 'insensitive',
+          },
+        },
       ];
     }
 
     if (query.theme) {
-      // Scoped implicitly: FeedbackTheme -> Theme is only ever created
-      // within this workspace, and the outer `workspaceId` filter above
-      // already restricts which Feedback rows are visible.
-      where.feedbackThemes = { some: { themeId: query.theme } };
+      where.feedbackThemes = {
+        some: {
+          themeId: query.theme,
+        },
+      };
     }
 
     if (query.startDate || query.endDate) {
       where.createdAt = {
-        ...(query.startDate ? { gte: query.startDate } : {}),
-        ...(query.endDate ? { lte: query.endDate } : {}),
+        ...(query.startDate
+          ? { gte: query.startDate }
+          : {}),
+        ...(query.endDate
+          ? { lte: query.endDate }
+          : {}),
       };
     }
 
-    const [total, rows] = await prisma.$transaction([
-      prisma.feedback.count({ where }),
+    /*
+     * Status counts should respect all the user's other filters
+     * (search, channel, sentiment, theme, date range), but should
+     * ignore the current status filter.
+     *
+     * This means the three cards can always show:
+     *
+     * NEW       32
+     * REVIEWED  41
+     * ACTIONED  16
+     *
+     * even when the user temporarily filters the list to only NEW.
+     */
+    const statusCountsWhere: Prisma.FeedbackWhereInput = {
+      ...where,
+    };
+
+    delete statusCountsWhere.status;
+
+    const [
+      total,
+      rows,
+      newCount,
+      reviewedCount,
+      actionedCount,
+    ] = await prisma.$transaction([
+      prisma.feedback.count({
+        where,
+      }),
+
       prisma.feedback.findMany({
         where,
-        include: { feedbackThemes: { include: { theme: true } } },
-        orderBy: { [query.sortBy]: query.sortOrder },
+        include: {
+          feedbackThemes: {
+            include: {
+              theme: true,
+            },
+          },
+        },
+        orderBy: {
+          [query.sortBy]: query.sortOrder,
+        },
         skip: (query.page - 1) * query.limit,
         take: query.limit,
       }),
+
+      prisma.feedback.count({
+        where: {
+          ...statusCountsWhere,
+          status: 'NEW',
+        },
+      }),
+
+      prisma.feedback.count({
+        where: {
+          ...statusCountsWhere,
+          status: 'REVIEWED',
+        },
+      }),
+
+      prisma.feedback.count({
+        where: {
+          ...statusCountsWhere,
+          status: 'ACTIONED',
+        },
+      }),
     ]);
 
-    return okPaginated(rows.map(toFeedbackDto), {
-      page: query.page,
-      limit: query.limit,
-      total,
-      totalPages: Math.max(1, Math.ceil(total / query.limit)),
+    return NextResponse.json({
+      success: true,
+
+      data: rows.map(toFeedbackDto),
+
+      pagination: {
+        page: query.page,
+        limit: query.limit,
+        total,
+        totalPages: Math.max(
+          1,
+          Math.ceil(total / query.limit)
+        ),
+      },
+
+      statusCounts: {
+        NEW: newCount,
+        REVIEWED: reviewedCount,
+        ACTIONED: actionedCount,
+      },
     });
   } catch (error) {
     return handleRouteError(error);
@@ -109,11 +223,11 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/feedback
  *
- * ADMIN/ANALYST. Creates feedback under the authenticated workspace, then
- * best-effort attempts AI classification and embedding generation. Both
- * are allowed to fail independently without rolling back the feedback
- * row — a failure leaves `aiAnalyzed = false` and is safe to retry via
- * /api/ai/reclassify/:feedbackId later.
+ * ADMIN/ANALYST. Creates feedback under the authenticated workspace,
+ * then best-effort attempts AI classification and embedding generation.
+ *
+ * Both AI operations are allowed to fail independently without
+ * rolling back the feedback row.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -127,6 +241,7 @@ export async function POST(request: NextRequest) {
     });
 
     const body = await request.json();
+
     const input = createFeedbackSchema.parse(body);
 
     const feedback = await prisma.feedback.create({
@@ -136,34 +251,63 @@ export async function POST(request: NextRequest) {
         sourceRef: input.sourceRef ?? null,
         customerLabel: input.customerLabel ?? null,
         status: 'NEW',
-        workspaceId: auth.workspaceId, // server controls workspace, status, AI fields
+        workspaceId: auth.workspaceId,
       },
     });
 
     try {
-      await classifyAndPersist(feedback.id, auth.workspaceId);
+      await classifyAndPersist(
+        feedback.id,
+        auth.workspaceId
+      );
     } catch (error) {
-      logger.error('Feedback classification failed at creation time', {
-        feedbackId: feedback.id,
-        message: error instanceof Error ? error.message : String(error),
-      });
+      logger.error(
+        'Feedback classification failed at creation time',
+        {
+          feedbackId: feedback.id,
+          message:
+            error instanceof Error
+              ? error.message
+              : String(error),
+        }
+      );
     }
 
     try {
-      await upsertFeedbackEmbedding(feedback.id, feedback.content);
+      await upsertFeedbackEmbedding(
+        feedback.id,
+        feedback.content
+      );
     } catch (error) {
-      logger.error('Feedback embedding failed at creation time', {
-        feedbackId: feedback.id,
-        message: error instanceof Error ? error.message : String(error),
-      });
+      logger.error(
+        'Feedback embedding failed at creation time',
+        {
+          feedbackId: feedback.id,
+          message:
+            error instanceof Error
+              ? error.message
+              : String(error),
+        }
+      );
     }
 
-    const finalFeedback = await prisma.feedback.findUniqueOrThrow({
-      where: { id: feedback.id },
-      include: { feedbackThemes: { include: { theme: true } } },
-    });
+    const finalFeedback =
+      await prisma.feedback.findUniqueOrThrow({
+        where: {
+          id: feedback.id,
+        },
+        include: {
+          feedbackThemes: {
+            include: {
+              theme: true,
+            },
+          },
+        },
+      });
 
-    return ok(toFeedbackDto(finalFeedback), { status: 201 });
+    return ok(toFeedbackDto(finalFeedback), {
+      status: 201,
+    });
   } catch (error) {
     return handleRouteError(error);
   }
